@@ -1,0 +1,19 @@
+
+services:
+  derby-db:
+    build: .
+    container_name: derby-db
+    ports:
+      - "1527:1527"
+    volumes:
+      - derby-data:/dbs
+    environment:
+      - DERBY_ARGS=-h 0.0.0.0
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "NetworkServerControl"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  derby-data:
