@@ -44,6 +44,7 @@ public class ProdutoDAO {
 
             while (resultSet.next()) {
                 Produto produto = Produto.builder()
+                        .id(resultSet.getLong("id"))
                         .nome(resultSet.getString("nome"))
                         .descricao(resultSet.getString("descricao"))
                         .preco(resultSet.getBigDecimal("preco"))
@@ -57,5 +58,45 @@ public class ProdutoDAO {
         }
 
         return produtos;
+    }
+
+    public void update(Produto produto) {
+        String sql = "UPDATE PRODUTO SET nome = ?, descricao = ?, preco = ?, estoque = ? WHERE id = ?";
+
+        try (Connection connection = DatabaseUtil.getConnection();
+        PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, produto.getNome());
+            statement.setString(2, produto.getDescricao());
+            statement.setBigDecimal(3, produto.getPreco());
+            statement.setInt(4, produto.getEstoque());
+            statement.setLong(5, produto.getId());
+
+            int rowsAffected = statement.executeUpdate();
+            LOGGER.info("Tuplas afetadas:  {}", rowsAffected);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void delete(Long id) {
+        String sql = "DELETE FROM PRODUTO WHERE id = ?";
+
+        try(Connection connection = DatabaseUtil.getConnection();
+            PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+
+            preparedStatement.setLong(1, id);
+            int rowsAffected = preparedStatement.executeUpdate();
+
+            if (rowsAffected > 0)
+                LOGGER.info("Deletado com sucesso");
+            else
+                LOGGER.warn("Produto com id informado não foi encontrado");
+
+        } catch (SQLException e) {
+            LOGGER.error("Failed to delete product with id: {}", id, e);
+            throw new RuntimeException(e);
+        }
     }
 }

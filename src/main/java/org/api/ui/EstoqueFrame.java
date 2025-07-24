@@ -9,6 +9,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 
 public class EstoqueFrame extends JFrame {
@@ -17,13 +18,14 @@ public class EstoqueFrame extends JFrame {
 
     private final ProdutoDAO produtoDAO;
 
-    // --- Componentes da UI como campos da classe ---
+    // ... (Componentes da UI e campos da classe) ...
     private final JTextField nomeField;
     private final JTextField descricaoField;
     private final JTextField precoField;
     private final JTextField estoqueField;
     private JTable tabelaProdutos;
     private DefaultTableModel tableModel;
+    private List<Produto> produtosList;
 
     public EstoqueFrame() {
         this.produtoDAO = new ProdutoDAO();
@@ -34,7 +36,8 @@ public class EstoqueFrame extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // --- PAINEL DO FORMULÁRIO (Norte) ---
+        // ... (código dos painéis Form, Table e Actions) ...
+        // Painel do Formulário (Norte)
         JPanel formPanel = new JPanel(new GridLayout(5, 2, 5, 5));
         formPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -54,90 +57,172 @@ public class EstoqueFrame extends JFrame {
         formPanel.add(estoqueField);
         formPanel.add(new JLabel());
         formPanel.add(addButton);
+        add(formPanel, BorderLayout.NORTH);
 
-        // --- TABELA DE PRODUTOS (Centro) ---
-        configurarTabela(); // Chamada para o novo método de configuração
+        // Painel da Tabela (Centro)
+        configurarTabela();
         JScrollPane scrollPane = new JScrollPane(tabelaProdutos);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Produtos Cadastrados"));
-
-        add(formPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
 
-        // --- AÇÕES ---
+        // Painel de Ações (Sul)
+        JPanel acoesPanel = criarAcoesPanel();
+        add(acoesPanel, BorderLayout.SOUTH);
+
+        // Ações
         addButton.addActionListener(e -> adicionarNovoProduto());
 
-        // **PASSO FINAL**: Carrega os dados na tabela assim que a janela é criada
+        // Carrega dados iniciais
         atualizarTabela();
     }
 
-    /**
-     * Configura o JTable e seu modelo (TableModel).
-     */
+    // ... (métodos configurarTabela, adicionarNovoProduto, etc.) ...
+
+    private JPanel criarAcoesPanel() {
+        JPanel acoesPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton comprarButton = new JButton("Comprar");
+        JButton venderButton = new JButton("Vender");
+        JButton deletarButton = new JButton("Deletar Produto"); // O botão já estava aqui, vamos ativá-lo
+
+        acoesPanel.add(comprarButton);
+        acoesPanel.add(venderButton);
+        acoesPanel.add(deletarButton); // Adicionando o botão ao painel
+
+        comprarButton.addActionListener(e -> executarCompraVenda(true));
+        venderButton.addActionListener(e -> executarCompraVenda(false));
+        deletarButton.addActionListener(e -> deletarProdutoSelecionado()); // <-- NOVA LÓGICA CONECTADA AQUI
+
+        return acoesPanel;
+    }
+
+    private void deletarProdutoSelecionado() {
+        // 1. Pega a linha selecionada
+        int selectedRow = tabelaProdutos.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Selecione um produto na tabela para deletar.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // 2. Pede confirmação ao usuário (MUITO IMPORTANTE!)
+        Produto produtoSelecionado = produtosList.get(selectedRow);
+        int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Tem certeza que deseja deletar o produto '" + produtoSelecionado.getNome() + "'?",
+                "Confirmar Deleção",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            try {
+                // 3. Chama o DAO para deletar o produto
+                produtoDAO.delete(produtoSelecionado.getId());
+                LOGGER.info("Produto ID {} deletado pelo usuário.", produtoSelecionado.getId());
+
+                // 4. Atualiza a tabela para refletir a remoção
+                atualizarTabela();
+            } catch (RuntimeException e) {
+                LOGGER.error("Falha ao deletar produto.", e);
+                JOptionPane.showMessageDialog(this, "Erro ao deletar produto: " + e.getMessage(), "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // ... (cole aqui os outros métodos da sua classe EstoqueFrame sem alterações) ...
     private void configurarTabela() {
         String[] colunas = {"ID", "Nome", "Descrição", "Preço", "Estoque"};
-
         tableModel = new DefaultTableModel(colunas, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // Impede que o usuário edite a tabela diretamente
-            }
+            public boolean isCellEditable(int row, int column) { return false; }
         };
         tabelaProdutos = new JTable(tableModel);
     }
 
-    /**
-     * Busca os dados do DAO e atualiza a JTable.
-     */
-    private void atualizarTabela() {
-        tableModel.setRowCount(0); // Limpa a tabela antes de preencher
-
-        LOGGER.info("Buscando produtos para atualizar a tabela...");
-        List<Produto> produtos = produtoDAO.findAll();
-
-        for (Produto produto : produtos) {
-            Object[] rowData = {
-                    produto.getId(),
-                    produto.getNome(),
-                    produto.getDescricao(),
-                    produto.getPreco(),
-                    produto.getEstoque()
-            };
-            tableModel.addRow(rowData); // Adiciona cada produto como uma nova linha
+    private void executarCompraVenda(boolean isCompra) {
+        int selectedRow = tabelaProdutos.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Selecione um produto na tabela.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
         }
-        LOGGER.info("Tabela atualizada com {} produtos.", produtos.size());
+
+        String quantidadeStr = JOptionPane.showInputDialog(this, "Digite a quantidade:", (isCompra ? "Comprar" : "Vender"), JOptionPane.QUESTION_MESSAGE);
+        if (quantidadeStr == null || quantidadeStr.trim().isEmpty()) return;
+
+        try {
+            int quantidade = Integer.parseInt(quantidadeStr);
+            if (quantidade <= 0) {
+                JOptionPane.showMessageDialog(this, "A quantidade deve ser positiva.", "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            Produto produtoSelecionado = produtosList.get(selectedRow);
+            int estoqueAtual = produtoSelecionado.getEstoque();
+
+            if (!isCompra && quantidade > estoqueAtual) {
+                JOptionPane.showMessageDialog(this, "Estoque insuficiente.", "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            int novoEstoque = isCompra ? estoqueAtual + quantidade : estoqueAtual - quantidade;
+
+            Produto produtoAtualizado = Produto.builder()
+                    .id(produtoSelecionado.getId())
+                    .nome(produtoSelecionado.getNome())
+                    .descricao(produtoSelecionado.getDescricao())
+                    .preco(produtoSelecionado.getPreco())
+                    .estoque(novoEstoque)
+                    .build();
+
+            produtoDAO.update(produtoAtualizado);
+            LOGGER.info("Produto ID {} atualizado. Novo estoque: {}", produtoSelecionado.getId(), novoEstoque);
+
+            atualizarTabela();
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Por favor, insira um número válido.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+        } catch (RuntimeException ex) {
+            LOGGER.error("Falha ao atualizar o estoque.", ex);
+            JOptionPane.showMessageDialog(this, "Erro ao atualizar estoque: " + ex.getMessage(), "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void atualizarTabela() {
+        tableModel.setRowCount(0);
+        try {
+            this.produtosList = produtoDAO.findAll();
+            for (Produto produto : produtosList) {
+                tableModel.addRow(new Object[]{produto.getId(), produto.getNome(), produto.getDescricao(), produto.getPreco(), produto.getEstoque()});
+            }
+        } catch (RuntimeException e) {
+            LOGGER.error("Falha ao carregar produtos.", e);
+            JOptionPane.showMessageDialog(this, "Erro ao carregar produtos: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void adicionarNovoProduto() {
         try {
             String nome = nomeField.getText();
-            String descricao = descricaoField.getText();
             BigDecimal preco = new BigDecimal(precoField.getText());
             int estoque = Integer.parseInt(estoqueField.getText());
 
-            if (nome.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "O campo 'Nome' é obrigatório.", "Erro de Validação", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
             Produto novoProduto = Produto.builder()
                     .nome(nome)
-                    .estoque(estoque)
-                    .descricao(descricao)
+                    .descricao(descricaoField.getText())
                     .preco(preco)
+                    .estoque(estoque)
                     .build();
 
-            LOGGER.info("Inserindo novo produto: {}", nome);
-            produtoDAO.insert(novoProduto); // Usando o nome do método do seu DAO
+            produtoDAO.insert(novoProduto);
+            JOptionPane.showMessageDialog(this, "Produto adicionado!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
 
-            JOptionPane.showMessageDialog(this, "Produto adicionado com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
             limparCampos();
-
-            // **PASSO FINAL**: Atualiza a tabela para exibir o novo produto
             atualizarTabela();
 
         } catch (NumberFormatException ex) {
-            LOGGER.warn("Erro de formato nos dados de entrada.", ex);
-            JOptionPane.showMessageDialog(this, "Por favor, insira um número válido para Preço e Estoque.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Preço e Estoque devem ser números válidos.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+        } catch (RuntimeException ex) {
+            LOGGER.error("Falha ao inserir produto.", ex);
+            JOptionPane.showMessageDialog(this, "Erro ao salvar produto: " + ex.getMessage(), "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
         }
     }
 
