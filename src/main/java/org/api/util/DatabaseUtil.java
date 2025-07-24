@@ -36,14 +36,12 @@ public class DatabaseUtil {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Database initialization failed", e);
+            throw new RuntimeException("Database initialization failed", e.getCause());
         }
     }
 
     private static boolean tableExists(Connection conn) throws SQLException {
-        // Hardcoded table name since we're only checking for "produtos"
-        String tableName = "PRODUTOS";
+        String tableName = "PRODUTO";
         DatabaseMetaData meta = conn.getMetaData();
         ResultSet rs = meta.getTables(null, null, tableName, new String[]{"TABLE"});
         return rs.next();
