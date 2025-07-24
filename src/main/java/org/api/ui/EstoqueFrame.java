@@ -9,7 +9,6 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.util.List;
 
 public class EstoqueFrame extends JFrame {
@@ -18,11 +17,11 @@ public class EstoqueFrame extends JFrame {
 
     private final ProdutoDAO produtoDAO;
 
-    // ... (Componentes da UI e campos da classe) ...
-    private final JTextField nomeField;
-    private final JTextField descricaoField;
-    private final JTextField precoField;
-    private final JTextField estoqueField;
+    // Componentes da UI
+    private JTextField nomeField;
+    private JTextField descricaoField;
+    private JTextField precoField;
+    private JTextField estoqueField;
     private JTable tabelaProdutos;
     private DefaultTableModel tableModel;
     private List<Produto> produtosList;
@@ -36,11 +35,28 @@ public class EstoqueFrame extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // ... (código dos painéis Form, Table e Actions) ...
         // Painel do Formulário (Norte)
+        JPanel formPanel = criarFormularioPanel();
+        add(formPanel, BorderLayout.NORTH);
+
+        // Painel da Tabela (Centro)
+        JScrollPane scrollPane = criarTabelaPanel();
+        add(scrollPane, BorderLayout.CENTER);
+
+        // Painel de Ações (Sul)
+        JPanel acoesPanel = criarAcoesPanel();
+        add(acoesPanel, BorderLayout.SOUTH);
+
+        // **ALTERAÇÃO 1**: A linha abaixo foi REMOVIDA para não carregar os dados inicialmente.
+        // atualizarTabela();
+    }
+
+    private JPanel criarFormularioPanel() {
+        // ... (este método continua igual)
         JPanel formPanel = new JPanel(new GridLayout(5, 2, 5, 5));
         formPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        // Inicializa os campos aqui, já que são campos da classe
         nomeField = new JTextField();
         descricaoField = new JTextField();
         precoField = new JTextField();
@@ -57,53 +73,60 @@ public class EstoqueFrame extends JFrame {
         formPanel.add(estoqueField);
         formPanel.add(new JLabel());
         formPanel.add(addButton);
-        add(formPanel, BorderLayout.NORTH);
 
-        // Painel da Tabela (Centro)
-        configurarTabela();
-        JScrollPane scrollPane = new JScrollPane(tabelaProdutos);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Produtos Cadastrados"));
-        add(scrollPane, BorderLayout.CENTER);
-
-        // Painel de Ações (Sul)
-        JPanel acoesPanel = criarAcoesPanel();
-        add(acoesPanel, BorderLayout.SOUTH);
-
-        // Ações
         addButton.addActionListener(e -> adicionarNovoProduto());
-
-        // Carrega dados iniciais
-        atualizarTabela();
+        return formPanel;
     }
 
-    // ... (métodos configurarTabela, adicionarNovoProduto, etc.) ...
+    private JScrollPane criarTabelaPanel() {
+        // ... (este método continua igual)
+        String[] colunas = {"ID", "Nome", "Descrição", "Preço", "Estoque"};
+        tableModel = new DefaultTableModel(colunas, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tabelaProdutos = new JTable(tableModel);
+        JScrollPane scrollPane = new JScrollPane(tabelaProdutos);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Produtos Cadastrados"));
+        return scrollPane;
+    }
 
     private JPanel criarAcoesPanel() {
         JPanel acoesPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+
+        // **ALTERAÇÃO 2**: Novo botão adicionado
+        JButton mostrarButton = new JButton("Mostrar/Atualizar Produtos");
+
         JButton comprarButton = new JButton("Comprar");
         JButton venderButton = new JButton("Vender");
-        JButton deletarButton = new JButton("Deletar Produto"); // O botão já estava aqui, vamos ativá-lo
+        JButton deletarButton = new JButton("Deletar Produto");
 
+        acoesPanel.add(mostrarButton); // Botão adicionado à tela
         acoesPanel.add(comprarButton);
         acoesPanel.add(venderButton);
-        acoesPanel.add(deletarButton); // Adicionando o botão ao painel
+        acoesPanel.add(deletarButton);
 
+        // Ações dos botões
+        mostrarButton.addActionListener(e -> atualizarTabela()); // Ação conectada
         comprarButton.addActionListener(e -> executarCompraVenda(true));
         venderButton.addActionListener(e -> executarCompraVenda(false));
-        deletarButton.addActionListener(e -> deletarProdutoSelecionado()); // <-- NOVA LÓGICA CONECTADA AQUI
+        deletarButton.addActionListener(e -> deletarProdutoSelecionado());
 
         return acoesPanel;
     }
 
+    // ... (O restante dos métodos, como deletarProdutoSelecionado, executarCompraVenda,
+    //      atualizarTabela, adicionarNovoProduto e limparCampos, continuam exatamente os mesmos)
+
     private void deletarProdutoSelecionado() {
-        // 1. Pega a linha selecionada
         int selectedRow = tabelaProdutos.getSelectedRow();
         if (selectedRow == -1) {
             JOptionPane.showMessageDialog(this, "Selecione um produto na tabela para deletar.", "Aviso", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // 2. Pede confirmação ao usuário (MUITO IMPORTANTE!)
         Produto produtoSelecionado = produtosList.get(selectedRow);
         int confirm = JOptionPane.showConfirmDialog(
                 this,
@@ -115,27 +138,14 @@ public class EstoqueFrame extends JFrame {
 
         if (confirm == JOptionPane.YES_OPTION) {
             try {
-                // 3. Chama o DAO para deletar o produto
                 produtoDAO.delete(produtoSelecionado.getId());
                 LOGGER.info("Produto ID {} deletado pelo usuário.", produtoSelecionado.getId());
-
-                // 4. Atualiza a tabela para refletir a remoção
                 atualizarTabela();
             } catch (RuntimeException e) {
                 LOGGER.error("Falha ao deletar produto.", e);
                 JOptionPane.showMessageDialog(this, "Erro ao deletar produto: " + e.getMessage(), "Erro de Banco de Dados", JOptionPane.ERROR_MESSAGE);
             }
         }
-    }
-
-    // ... (cole aqui os outros métodos da sua classe EstoqueFrame sem alterações) ...
-    private void configurarTabela() {
-        String[] colunas = {"ID", "Nome", "Descrição", "Preço", "Estoque"};
-        tableModel = new DefaultTableModel(colunas, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-        tabelaProdutos = new JTable(tableModel);
     }
 
     private void executarCompraVenda(boolean isCompra) {
